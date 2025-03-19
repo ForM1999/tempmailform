@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <title>Gerador de E-mails Temporários</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center; }
+        input, button { padding: 10px; margin: 10px; width: 80%; max-width: 300px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #emails { margin-top: 20px; text-align: left; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Gerador de E-mails Temporários</h1>
+    <input type="text" id="customName" placeholder="Nome personalizado (opcional)">
+    <button onclick="generateEmail()">Gerar E-mail</button>
+    <h3 id="emailResult"></h3>
+    <button id="checkInboxBtn" onclick="checkInbox()" style="display:none;">Verificar Caixa de Entrada</button>
+    <div id="emails"></div>
+
+    <script>
+        let token = "";
+        let inboxId = "";
+
+        async function generateEmail() {
+            const customName = document.getElementById("customName").value || "usuario" + Math.floor(Math.random() * 1000);
+
+            // Buscar domínio
+            const response = await fetch('https://api.mail.tm/domains');
+            const domains = await response.json();
+            const domain = domains["hydra:member"][0].domain;
+            const email = `${customName}@${domain}`;
+
+            // Criar caixa de entrada
+            const accountResponse = await fetch('https://api.mail.tm/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: email, password: '12345678' })
+            });
+
+            if (!accountResponse.ok) {
+                alert('Erro ao criar e-mail.');
+                return;
+            }
+
+            // Autenticar
+            const authResponse = await fetch('https://api.mail.tm/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: email, password: '12345678' })
+            });
+
+            const authData = await authResponse.json();
+            token = authData.token;
+            inboxId = authData.id;
+
+            document.getElementById("emailResult").textContent = `Seu e-mail temporário: ${email}`;
+            document.getElementById("checkInboxBtn").style.display = "block";
+        }
+
+        async function checkInbox() 
+            if (!token) {
+                alert('Gere um e-mail primeiro!');
+                return;
+            }
+
+            const messagesResponse = await fetch('https://api.mail.tm/messages', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const messages = await messagesResponse.json();
+            const inboxDiv = document.getElementById("emails");
+            inboxDiv.innerHTML = "<h3>Caixa de Entrada:</h3>";
+
+            if (messages["hydra:totalItems"] === 0) {
+                inboxDiv.innerHTML += "<p>Nenhuma mensagem recebida.</p>";
+            } else {
+                messages["hydra:member"].forEach(msg => {
+                    inboxDiv.innerHTML += `<p><strong>De:</strong> ${msg.from.address}<br>
+                                           <strong>Assunto:</strong> ${msg.subject}<br>
+                                           <strong>Mensagem:</strong> ${msg.intro}</p><hr>`;
+                });
+            }
+        }
+    </script>
+</body>
+</html>
